@@ -43,14 +43,15 @@ def step(actions):
         return None
 
 
+
 def get_zombie_threat_score(zombie):
     """Определение угрозы от зомби по его типу и характеристикам."""
     threat_scores = {
         'normal': 1,
         'fast': 2,
-        'bomber': 4,
-        'liner': 6,
-        'juggernaut': 5,
+        'bomber': 5,
+        'liner': 20,
+        'juggernaut': 7,
         'chaos_knight': 3
     }
     base_threat = threat_scores.get(zombie['type'], 0)
@@ -60,58 +61,42 @@ def prioritize_zombies(zombies):
     """Сортировка зомби по уровню угрозы."""
     return sorted(zombies, key=get_zombie_threat_score, reverse=True)
 
-def attack_zombies(base_coords, zombies):
-    """Создание команд для атаки зомби с учетом их типа и угрозы."""
+def prioritize_enemy_blocks(enemy_blocks):
+    """Сортировка вражеских блоков по приоритету атаки."""
+    if enemy_blocks:
+        return sorted(enemy_blocks, key=lambda block: (block['isHead'], -block['health']))
+    return []
+
+def attack_targets(base_coords, zombies, enemy_blocks):
+    """Создание команд для атаки зомби и вражеских блоков."""
     attack_commands = []
-    if base_coords and zombies:
+
+    prioritized_zombies = prioritize_zombies(zombies)
+    prioritized_enemy_blocks = prioritize_enemy_blocks(enemy_blocks)
+
+    if base_coords:
         for base in base_coords:
             bx, by = base["x"], base["y"]
             base_id = base["id"]
             is_head = base.get("isHead", False)
             attack_range = 8 if is_head else 5
-            
-            prioritized_zombies = prioritize_zombies(zombies)
+
             for zombie in prioritized_zombies:
                 zx, zy = zombie["x"], zombie["y"]
-                zombie_type = zombie["type"]
                 if calculate_distance(bx, by, zx, zy) <= attack_range:
-                    if zombie_type == "normal" or zombie_type == "fast":
-                        attack_commands.append({
-                            "blockId": base_id,
-                            "target": {"x": zx, "y": zy}
-                        })
-                    elif zombie_type == "bomber":
-                        # Атака всех клеток в радиусе 1 от себя
-                        for dx in range(-1, 2):
-                            for dy in range(-1, 2):
-                                if (dx != 0 or dy != 0) and 0 <= zx + dx < 10 and 0 <= zy + dy < 10:
-                                    attack_commands.append({
-                                        "blockId": base_id,
-                                        "target": {"x": zx + dx, "y": zy + dy}
-                                    })
-                    elif zombie_type == "liner":
-                        for x in range(zx, bx, -1):
-                            if x == bx and zy == by:
-                                attack_commands.append({
-                                    "blockId": base_id,
-                                    "target": {"x": x, "y": by}
-                                })
-                                break
-                    elif zombie_type == "juggernaut":
-                        attack_commands.append({
-                            "blockId": base_id,
-                            "target": {"x": zx, "y": zy}
-                        })
-                    elif zombie_type == "chaos_knight":
-                        moves = [(2, 1), (2, -1), (-2, 1), (-2, -1),
-                                 (1, 2), (1, -2), (-1, 2), (-1, -2)]
-                        for dx, dy in moves:
-                            nx, ny = zx + dx, zy + dy
-                            if 0 <= nx < 10 and 0 <= ny < 10:
-                                attack_commands.append({
-                                    "blockId": base_id,
-                                    "target": {"x": nx, "y": ny}
-                                })
+                    attack_commands.append({
+                        "blockId": base_id,
+                        "target": {"x": zx, "y": zy}
+                    })
+
+            for enemy_block in prioritized_enemy_blocks:
+                ex, ey = enemy_block["x"], enemy_block["y"]
+                if calculate_distance(bx, by, ex, ey) <= attack_range:
+                    attack_commands.append({
+                        "blockId": base_id,
+                        "target": {"x": ex, "y": ey}
+                    })
+
     return attack_commands
 
 
@@ -133,10 +118,10 @@ def move_base(base_coords):
                 }
     return move_base_command
 
-def dynamic_strategy(base_coords, zombies, player_gold, spot_coords):
+def dynamic_strategy(base_coords, zombies, player_gold,enemy_blocks):
     """Определение стратегий на основе текущего состояния игры."""
     # Проверка угрозы зомби
-    attack_commands = attack_zombies(base_coords, zombies)
+    attack_commands = attack_targets(base_coords, zombies, enemy_blocks)
     
     # Проверка возможности расширения базы
     build_commands = manage_base(base_coords, player_gold)
@@ -205,12 +190,13 @@ def main():
 
         base_coords = game_data.get("base", [])
         zombies = game_data.get("zombies", [])
+        enemy_blocks = game_data.get("enemyBlocks", [])
         player_gold = game_data["player"].get("gold", 0)
         turn_ends_in_ms = game_data.get("turnEndsInMs", 1000)
-        spot_coords = [(spot["x"], spot["y"]) for spot in spot_data.get("zpots", [])]
+        spot_coords = [(spot["x"], spot["y"]) for spot in spot_data.get("spots", [])]
 
         # Определение стратегий и подготовка команд
-        attack_commands, build_commands, move_base_command = dynamic_strategy(base_coords, zombies, player_gold, spot_coords)
+        attack_commands, build_commands, move_base_command = dynamic_strategy(base_coords, zombies, player_gold, enemy_blocks)
 
         # Отправка команд на сервер
         actions = {
@@ -230,4 +216,7 @@ def main():
         time.sleep(turn_ends_in_ms / 1000)
 
 if __name__ == "__main__":
+    # while True:
+    #     print(registration().text)
+    #     time.sleep(10)
     main()
