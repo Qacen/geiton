@@ -7,14 +7,16 @@ import math
 HEADERS={'X-Auth-Token':'668d3dd517f68668d3dd517f6b'}
 API_URL = "https://games-test.datsteam.dev/play/"
 
-
+def registration():
+    response = requests.put('https://games-test.datsteam.dev/rounds/zombidef',headers=HEADERS)
 def round_info():
-    response = requests.get('https://games-test.datsteam.dev/rounds/zombidef',headers=head)
+    response = requests.get('https://games-test.datsteam.dev/rounds/zombidef',headers=HEADERS)
     json_data = response.json()
     return json_data
 def around_info():
     try:
-        response = requests.get(f"{API_URL}zombidef/units", headers=HEADERS)
+        response = requests.get("https://games-test.datsteam.dev/play/zombidef/units", headers=HEADERS)
+        print
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
@@ -23,7 +25,7 @@ def around_info():
 
 def spot_info():
     try:
-        response = requests.get(f"{API_URL}zombidef/world", headers=HEADERS)
+        response = requests.get("https://games-test.datsteam.dev/play/zombidef/world", headers=HEADERS)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
@@ -32,12 +34,14 @@ def spot_info():
 
 def step(actions):
     try:
-        response = requests.post(f"{API_URL}zombidef/command", headers=HEADERS, json=actions)
+        response = requests.post("https://games-test.datsteam.dev/play/zombidef/command", headers=HEADERS, json=actions)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
         print(f"Error sending step: {e}")
         return None
+
+
 
 
 def calculate_distance(x1, y1, x2, y2):
@@ -82,7 +86,7 @@ def main():
         game_data = around_info()
         spot_data = spot_info()
 
-        print(around_info.)
+        print(around_info())
 
         if game_data is None or spot_data is None:
             time.sleep(1)
@@ -119,4 +123,6 @@ def main():
         time.sleep(turn_ends_in_ms / 1000)
 
 if __name__ == "__main__":
-    main()
+    print(registration())
+    print(round_info())
+    #main()
