@@ -1,6 +1,6 @@
 import requests
 import json
-
+import random
 import time
 import math
 
@@ -153,13 +153,14 @@ def get_base_coords(base_data):
 def get_buildable_spots(base_coords):
     """Определение доступных мест для расширения базы (клетки рядом с базой)."""
     buildable_spots = []
+    occupied_coords = [(b['x'], b['y']) for b in base_coords]
     for base in base_coords:
-        # Извлечение координат из словаря
         bx, by = base['x'], base['y']
         potential_coords = [(bx+1, by), (bx-1, by), (bx, by+1), (bx, by-1)]
         for cx, cy in potential_coords:
-            if (cx, cy) not in [(b['x'], b['y']) for b in base_coords]:  # Проверка, что координаты не заняты
+            if (cx, cy) not in occupied_coords:  # Проверка, что координаты не заняты
                 buildable_spots.append((cx, cy))
+                occupied_coords.append((cx, cy))  # Добавляем потенциальные координаты в список занятых
     return buildable_spots
 
 def prioritize_spots(buildable_spots, base_coords):
@@ -170,20 +171,25 @@ def calculate_distance(x1, y1, x2, y2):
     """Вычисление расстояния между двумя точками."""
     return ((x1 - x2)**2 + (y1 - y2)**2) ** 0.5
 
-def prepare_build_commands(build_spots):
+def prepare_build_commands(build_spots, player_gold):
     """Подготовка команд для постройки базы на основе отсортированных спотов."""
     build_commands = []
+    # Построим максимум столько блоков, сколько позволяет золото
+    build_cost = 1  # Замените на реальную стоимость постройки одного блока
+    max_blocks = player_gold // build_cost
+    
     for spot in build_spots:
+        if max_blocks <= 0:
+            break
         build_commands.append({"x": spot[0], "y": spot[1]})
-        # Мы можем строить только на одном месте за раз
-        break
+        max_blocks -= 1
     return build_commands
 
 def manage_base(base_coords, player_gold):
     """Управление постройкой базы: определение доступных мест и формирование команд."""
     buildable_spots = get_buildable_spots(base_coords)
     prioritized_spots = prioritize_spots(buildable_spots, base_coords)
-    build_commands = prepare_build_commands(prioritized_spots)
+    build_commands = prepare_build_commands(prioritized_spots, player_gold)
     return build_commands
 
 
