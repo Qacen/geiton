@@ -173,15 +173,24 @@ def prepare_build_commands(build_spots, player_gold):
         max_blocks -= 1
     return build_commands
 
-def manage_base(base_coords, player_gold):
-    """Управление постройкой базы: определение доступных мест и формирование команд."""
+def get_zspot_coords(spot_data):
+    """Получение координат точек спауна зомби типа 'default'."""
+    return [(spot['x'], spot['y']) for spot in spot_data if spot['type'] == 'default']
+
+def prioritize_spots_with_zspot(buildable_spots, zspot_coords):
+    """Сортировка спотов для постройки на основе их расстояния до точек спауна зомби типа 'default'."""
+    return sorted(buildable_spots, key=lambda spot: min(calculate_distance(spot[0], spot[1], zx, zy) for (zx, zy) in zspot_coords))
+
+def manage_base(base_coords, player_gold, zspot_coords):
+    """Управление постройкой базы: определение доступных мест и формирование команд с учетом точек спауна зомби типа 'default'."""
     buildable_spots = get_buildable_spots(base_coords)
-    prioritized_spots = prioritize_spots(buildable_spots, base_coords)
+    prioritized_spots = prioritize_spots_with_zspot(buildable_spots, zspot_coords)
     build_commands = prepare_build_commands(prioritized_spots, player_gold)
     return build_commands
 
 def visualize_base(base_coords, spots, zombies, enemy_blocks, width, height):
     """Визуализация структуры базы на графике с динамическими размерами."""
+    print('visualizat')
     plt.figure(figsize=(width, height))
     plt.xlim(0, width)
     plt.ylim(0, height)
@@ -224,14 +233,18 @@ def main():
         enemy_blocks = game_data.get("enemyBlocks", [])
         player_gold = game_data["player"].get("gold", 0)
         turn_ends_in_ms = game_data.get("turnEndsInMs", 1000)
+        zspot_coords = get_zspot_coords(spot_data['zpots'])  # Получаем координаты точек спауна зомби типа 'default'
         spot_coords = [(spot["x"], spot["y"]) for spot in spot_data.get("spots", [])]
         width = max(x for x, y in spot_coords) + 1 if spot_coords else 10
         height = max(y for x, y in spot_coords) + 1 if spot_coords else 10
-        # Определение стратегий и подготовка команд
-        spots = spot_data.get("spots", [])
-        attack_commands, build_commands, move_base_command = dynamic_strategy(base_coords, zombies, player_gold, enemy_blocks,width,height,spots)
 
-        # Отправка команд на сервер
+        # Определение стратегий и подготовка команд
+        attack_commands, build_commands, move_base_command = dynamic_strategy(base_coords, zombies, player_gold, enemy_blocks, width, height, spot_data)
+
+        # Обновление функции управления базой с учетом точек спауна зомби
+        build_commands = manage_base(base_coords, player_gold, zspot_coords)
+
+        # Подготовка команд для отправки на сервер
         actions = {
             "attack": attack_commands,
             "build": build_commands,
@@ -245,15 +258,12 @@ def main():
 
         step(actions)
 
-        if random.randrange(1,10) == 3:
+        if random.randrange(1, 3) == 3:
             try:
-                visualize_base(base_coords, spots, zombies, enemy_blocks, width, height)
+                visualize_base(base_coords, spot_data.get("spots", []), zombies, enemy_blocks, width, height)
             except:
-                print('err vizualization')
-        # if random.randrange(1,5) == 3:
-        #     width = max(x for x, y in spot_coords) + 1 if spot_coords else 10
-        #     height = max(y for x, y in spot_coords) + 1 if spot_coords else 10
-        #     visualize_base(base_coords,zombies,enemy_blocks,width, height)
+                print('Error visualizing base')
+        
         # Ожидание до следующего хода
         time.sleep(turn_ends_in_ms / 1000)
 
