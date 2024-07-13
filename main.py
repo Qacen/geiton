@@ -3,6 +3,9 @@ import json
 import random
 import time
 import math
+import matplotlib.pyplot as plt
+from collections import deque 
+
 
 HEADERS={'X-Auth-Token':'668d3dd517f68668d3dd517f6b'}
 API_URL = "https://games-test.datsteam.dev/play/"
@@ -42,7 +45,9 @@ def step(actions):
         print(f"Error sending step: {e}")
         return None
 
-
+def calculate_distance(x1, y1, x2, y2):
+    """Вычисление расстояния между двумя точками."""
+    return ((x1 - x2)**2 + (y1 - y2)**2) ** 0.5
 
 def get_zombie_threat_score(zombie):
     """Определение угрозы от зомби по его типу и характеристикам."""
@@ -64,7 +69,7 @@ def prioritize_zombies(zombies):
 def prioritize_enemy_blocks(enemy_blocks):
     """Сортировка вражеских блоков по приоритету атаки."""
     if enemy_blocks:
-        return sorted(enemy_blocks, key=lambda block: (block['isHead'], -block['health']))
+        return sorted(enemy_blocks, key=lambda block: (block.get('isHead', False), -block['health']))
     return []
 
 def attack_targets(base_coords, zombies, enemy_blocks):
@@ -118,19 +123,17 @@ def move_base(base_coords):
                 }
     return move_base_command
 
-def dynamic_strategy(base_coords, zombies, player_gold,enemy_blocks):
+def dynamic_strategy(base_coords, zombies, player_gold, enemy_blocks, width, height, spots):
     """Определение стратегий на основе текущего состояния игры."""
-    # Проверка угрозы зомби
+    # Проверка угрозы зомби и вражеских блоков
     attack_commands = attack_targets(base_coords, zombies, enemy_blocks)
-    
-    # Проверка возможности расширения базы
+
     build_commands = manage_base(base_coords, player_gold)
-    
+    print(build_commands)
     # Проверка необходимости перемещения базы
     move_base_command = move_base(base_coords)
-    
-    return attack_commands, build_commands, move_base_command
 
+    return attack_commands, build_commands, move_base_command
 def get_base_coords(base_data):
     """Получение координат всех блоков базы."""
     return [{'x': base['x'], 'y': base['y']} for base in base_data]
@@ -160,7 +163,7 @@ def prepare_build_commands(build_spots, player_gold):
     """Подготовка команд для постройки базы на основе отсортированных спотов."""
     build_commands = []
     # Построим максимум столько блоков, сколько позволяет золото
-    build_cost = 1  # Замените на реальную стоимость постройки одного блока
+    build_cost = 10  # Замените на реальную стоимость постройки одного блока
     max_blocks = player_gold // build_cost
     
     for spot in build_spots:
@@ -177,6 +180,34 @@ def manage_base(base_coords, player_gold):
     build_commands = prepare_build_commands(prioritized_spots, player_gold)
     return build_commands
 
+def visualize_base(base_coords, spots, zombies, enemy_blocks, width, height):
+    """Визуализация структуры базы на графике с динамическими размерами."""
+    plt.figure(figsize=(width, height))
+    plt.xlim(0, width)
+    plt.ylim(0, height)
+    plt.gca().set_aspect('equal', adjustable='box')
+
+    for base in base_coords:
+        plt.plot(base['x'], base['y'], 'bs', label='Base Block' if base['isHead'] else '_nolegend_')
+    
+    for spot in spots:
+        if spot['type'] == 'default':
+            plt.plot(spot['x'], spot['y'], 'ro', label='Zombie Spawner')
+        elif spot['type'] == 'wall':
+            plt.plot(spot['x'], spot['y'], 'go', label='Wall')
+
+    for zombie in zombies:
+        plt.plot(zombie['x'], zombie['y'], 'k*', label='Zombie')
+
+    for block in enemy_blocks:
+        plt.plot(block['x'], block['y'], 'rs', label='Enemy Block')
+
+    plt.legend(loc='upper right')
+    plt.grid(True)
+    plt.xlabel('X Coordinate')
+    plt.ylabel('Y Coordinate')
+    plt.title('Base Visualization')
+    plt.show()
 
 def main():
     """Основной цикл игры."""
@@ -194,9 +225,11 @@ def main():
         player_gold = game_data["player"].get("gold", 0)
         turn_ends_in_ms = game_data.get("turnEndsInMs", 1000)
         spot_coords = [(spot["x"], spot["y"]) for spot in spot_data.get("spots", [])]
-
+        width = max(x for x, y in spot_coords) + 1 if spot_coords else 10
+        height = max(y for x, y in spot_coords) + 1 if spot_coords else 10
         # Определение стратегий и подготовка команд
-        attack_commands, build_commands, move_base_command = dynamic_strategy(base_coords, zombies, player_gold, enemy_blocks)
+        spots = spot_data.get("spots", [])
+        attack_commands, build_commands, move_base_command = dynamic_strategy(base_coords, zombies, player_gold, enemy_blocks,width,height,spots)
 
         # Отправка команд на сервер
         actions = {
@@ -206,12 +239,21 @@ def main():
         }
 
         # Отладочная информация
-        print(f"Attack Commands: {attack_commands}")
+        print(f"Attack Commands: {len(attack_commands)}")
         print(f"Build Commands: {build_commands}")
         print(f"Move Base Command: {move_base_command}")
 
         step(actions)
 
+        if random.randrange(1,10) == 3:
+            try:
+                visualize_base(base_coords, spots, zombies, enemy_blocks, width, height)
+            except:
+                print('err vizualization')
+        # if random.randrange(1,5) == 3:
+        #     width = max(x for x, y in spot_coords) + 1 if spot_coords else 10
+        #     height = max(y for x, y in spot_coords) + 1 if spot_coords else 10
+        #     visualize_base(base_coords,zombies,enemy_blocks,width, height)
         # Ожидание до следующего хода
         time.sleep(turn_ends_in_ms / 1000)
 
